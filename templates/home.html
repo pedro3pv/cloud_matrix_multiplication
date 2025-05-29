@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplicação de Matrizes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .matrix-section {
+            margin-bottom: 25px;
+        }
+
+        .matrix-input {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        textarea:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        #multiplyBtn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+            min-width: 200px;
+        }
+
+        #multiplyBtn:hover:not(:disabled) {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+
+        #multiplyBtn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading States */
+        .loading-container {
+            display: none;
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+
+        .loading-container.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #666;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        /* Result Display */
+        .result-container {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .result-container.show {
+            display: block;
+        }
+
+        .result-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .result-content {
+            padding: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .result-content.success {
+            background-color: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result-content.error {
+            background-color: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .matrix-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+
+        .matrix-row {
+            display: block;
+            margin: 2px 0;
+        }
+
+        .matrix-element {
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+            padding: 2px 5px;
+            margin: 1px;
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+        }
+
+        .example {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-indicator.processing {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-indicator.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-indicator.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Calculadora de Multiplicação de Matrizes</h1>
+
+        <form id="matrixForm">
+            <div class="matrix-section">
+                <div class="matrix-input">
+                    <label for="matrixA">Matriz A:</label>
+                    <textarea id="matrixA" name="matrixA" placeholder="Digite a matriz A no formato: [[1,2,3],[4,5,6],[7,8,9]]" required></textarea>
+                    <div class="example">Exemplo: [[1,2],[3,4]] para uma matriz 2x2</div>
+                </div>
+
+                <div class="matrix-input">
+                    <label for="matrixB">Matriz B:</label>
+                    <textarea id="matrixB" name="matrixB" placeholder="Digite a matriz B no formato: [[1,2,3],[4,5,6],[7,8,9]]" required></textarea>
+                    <div class="example">Exemplo: [[5,6],[7,8]] para uma matriz 2x2</div>
+                </div>
+            </div>
+
+            <div class="button-container">
+                <button type="button" id="multiplyBtn">
+                    Multiplicar Matrizes
+                    <span id="statusIndicator" class="status-indicator" style="display: none;"></span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Loading State -->
+        <div id="loadingContainer" class="loading-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Processando multiplicação de matrizes...</p>
+            <p style="font-size: 14px; color: #888; margin-top: 10px;">Aguarde enquanto o servidor calcula o resultado</p>
+        </div>
+
+        <!-- Result Display -->
+        <div id="resultContainer" class="result-container">
+            <div class="result-header">Resultado da Multiplicação:</div>
+            <div id="resultContent" class="result-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // URL da sua API - substitua pela URL real
+        const API_URL = 'https://sua-api.com/multiply-matrices';
+
+        // Elementos do DOM
+        const multiplyBtn = document.getElementById('multiplyBtn');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultContent = document.getElementById('resultContent');
+        const statusIndicator = document.getElementById('statusIndicator');
+
+        multiplyBtn.addEventListener('click', function() {
+            const matrixA = document.getElementById('matrixA').value.trim();
+            const matrixB = document.getElementById('matrixB').value.trim();
+
+            // Validação básica
+            if (!matrixA || !matrixB) {
+                showResult('Por favor, preencha ambas as matrizes.', 'error');
+                return;
+            }
+
+            try {
+                // Validar formato das matrizes
+                const parsedMatrixA = JSON.parse(matrixA);
+                const parsedMatrixB = JSON.parse(matrixB);
+
+                if (!Array.isArray(parsedMatrixA) || !Array.isArray(parsedMatrixB)) {
+                    throw new Error('Formato inválido');
+                }
+
+                // Validar se são matrizes válidas
+                if (!isValidMatrix(parsedMatrixA) || !isValidMatrix(parsedMatrixB)) {
+                    throw new Error('Matrizes devem ter estrutura retangular');
+                }
+
+                // Enviar para a API
+                sendMatricesToAPI(parsedMatrixA, parsedMatrixB);
+
+            } catch (error) {
+                showResult('Formato de matriz inválido. Use o formato: [[1,2],[3,4]]', 'error');
+            }
+        });
+
+        function isValidMatrix(matrix) {
+            if (!Array.isArray(matrix) || matrix.length === 0) return false;
+            const rowLength = matrix[0].length;
+            return matrix.every(row => Array.isArray(row) && row.length === rowLength);
+        }
+
+        function sendMatricesToAPI(matrixA, matrixB) {
+            // Mostrar estado de carregamento
+            showLoadingState();
+
+            // Preparar dados para envio
+            const requestBody = {
+                matrixA: matrixA,
+                matrixB: matrixB
+            };
+
+            // Fazer requisição POST para a API
+            fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`Erro HTTP ${response.status}: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Sucesso - mostrar resultado
+                console.log('Resposta da API:', data);
+
+                if (data.result || data.matrix || data.multiplication) {
+                    // Diferentes possíveis nomes para o resultado
+                    const resultMatrix = data.result || data.matrix || data.multiplication;
+                    showMatrixResult(resultMatrix, 'success');
+                } else {
+                    showResult('Multiplicação realizada com sucesso, mas formato de resposta inesperado.', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                let errorMessage = 'Erro ao calcular a multiplicação das matrizes.';
+
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Erro de conexão. Verifique se a API está disponível.';
+                } else if (error.message.includes('HTTP 400')) {
+                    errorMessage = 'Dados inválidos enviados para a API.';
+                } else if (error.message.includes('HTTP 500')) {
+                    errorMessage = 'Erro interno do servidor. Tente novamente.';
+                } else {
+                    errorMessage = `Erro: ${error.message}`;
+                }
+
+                showResult(errorMessage, 'error');
+            })
+            .finally(() => {
+                hideLoadingState();
+            });
+        }
+
+        function showLoadingState() {
+            multiplyBtn.disabled = true;
+            multiplyBtn.textContent = 'Processando...';
+            loadingContainer.classList.add('show');
+            resultContainer.classList.remove('show');
+
+            statusIndicator.textContent = 'Processando';
+            statusIndicator.className = 'status-indicator processing';
+            statusIndicator.style.display = 'inline-block';
+        }
+
+        function hideLoadingState() {
+            multiplyBtn.disabled = false;
+            multiplyBtn.textContent = 'Multiplicar Matrizes';
+            loadingContainer.classList.remove('show');
+            statusIndicator.style.display = 'none';
+        }
+
+        function showMatrixResult(matrix, type) {
+            resultContent.className = `result-content ${type}`;
+
+            if (Array.isArray(matrix)) {
+                // Formatação bonita da matriz resultado
+                let matrixDisplay = 'Matriz Resultado:\n\n';
+                matrixDisplay += formatMatrix(matrix);
+
+                // Também mostrar em formato JSON
+                matrixDisplay += '\n\nFormato JSON:\n' + JSON.stringify(matrix, null, 2);
+
+                resultContent.textContent = matrixDisplay;
+            } else {
+                resultContent.textContent = `Resultado: ${JSON.stringify(matrix, null, 2)}`;
+            }
+
+            resultContainer.classList.add('show');
+
+            // Atualizar indicador de status
+            statusIndicator.textContent = type === 'success' ? 'Concluído' : 'Erro';
+            statusIndicator.className = `status-indicator ${type}`;
+            statusIndicator.style.display = 'inline-block';
+
+            // Remover indicador após 3 segundos
+            setTimeout(() => {
+                statusIndicator.style.display = 'none';
+            }, 3000);
+        }
+
+        function showResult(message, type) {
+            resultContent.className = `result-content ${type}`;
+            resultContent.textContent = message;
+            resultContainer.classList.add('show');
+
+            statusIndicator.textContent = type === 'success' ? 'Concluído' : 'Erro';
+            statusIndicator.className = `status-indicator ${type}`;
+            statusIndicator.style.display = 'inline-block';
+
+            setTimeout(() => {
+                statusIndicator.style.display = 'none';
+            }, 3000);
+        }
+
+        function formatMatrix(matrix) {
+            let formatted = '';
+            matrix.forEach((row, i) => {
+                formatted += '[ ';
+                row.forEach((cell, j) => {
+                    formatted += cell.toString().padStart(6, ' ');
+                    if (j < row.length - 1) formatted += ', ';
+                });
+                formatted += ' ]';
+                if (i < matrix.length - 1) formatted += '\n';
+            });
+            return formatted;
+        }
+
+        // Exemplo de preenchimento automático para teste
+        document.addEventListener('DOMContentLoaded', function() {
+            // Remova estas linhas em produção
+            document.getElementById('matrixA').value = '[[1,2],[3,4]]';
+            document.getElementById('matrixB').value = '[[5,6],[7,8]]';
+        });
+    </script>
+</body>
+</html>
