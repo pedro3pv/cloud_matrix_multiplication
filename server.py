@@ -11,22 +11,18 @@ app.config['SECRET_KEY'] = 'matrix_multiplication_secret'
 socketio = SocketIO(app, cors_allowed_origins='*', logger=True, engineio_logger=True)
 
 
-# Armazenamento de workers e tarefas
 connected_workers = {}
 pending_tasks = {}
 completed_tasks = {}
 task_results = defaultdict(dict)
 def validate_matrix_complete(matrix):
-    """Validação completa da estrutura da matriz"""
     if not isinstance(matrix, list) or len(matrix) == 0:
         return False
 
-    # Verificar se todas as linhas têm o mesmo tamanho
     row_length = len(matrix[0])
     for row in matrix:
         if not isinstance(row, list) or len(row) != row_length:
             return False
-        # Verificar se todos os elementos são números
         for element in row:
             if not isinstance(element, (int, float)):
                 return False
@@ -38,22 +34,18 @@ class TaskManager:
         self.lock = threading.Lock()
 
     def create_task(self, matrix_a, matrix_b):
-        """Divide a matriz A em blocos para distribuição"""
         try:
             task_id = str(uuid.uuid4())
 
-            # Verificar se há workers disponíveis
             if len(connected_workers) == 0:
                 raise Exception("Nenhum worker conectado")
 
-            # Validar matrizes antes de processar
             if not matrix_a or not matrix_b:
                 raise ValueError("Matrizes não podem estar vazias")
 
             if not isinstance(matrix_a, list) or not isinstance(matrix_b, list):
                 raise ValueError("Matrizes devem ser listas")
 
-            # Calcular tamanho do chunk
             total_rows = len(matrix_a)
             if total_rows == 0:
                 raise ValueError("Matriz A não pode ter zero linhas")
@@ -61,7 +53,6 @@ class TaskManager:
             num_workers = len(connected_workers)
             chunk_size = max(1, total_rows // num_workers)
 
-            # Criar sub-tarefas
             subtasks = []
             for i in range(0, total_rows, chunk_size):
                 end_row = min(i + chunk_size, total_rows)
@@ -89,10 +80,9 @@ class TaskManager:
 
         except Exception as e:
             print(f"Erro em create_task: {e}")
-            return None, None  # Retornar tupla mesmo em caso de erro
+            return None, None
 
     def complete_subtask(self, task_id, subtask_id, result, start_row):
-        """Marca uma sub-tarefa como completa"""
         print(f"DEBUG - complete_subtask: task_id={task_id}, start_row={start_row}")
 
         with self.lock:
@@ -100,7 +90,6 @@ class TaskManager:
                 task = pending_tasks[task_id]
                 print(f"DEBUG - Tarefa encontrada: {task['completed_subtasks']}/{task['total_subtasks']} completas")
 
-                # Inserir resultado na posição correta
                 try:
                     for i, row in enumerate(result):
                         if start_row + i < len(task['result_matrix']):
@@ -113,7 +102,6 @@ class TaskManager:
                     task['completed_subtasks'] += 1
                     print(f"DEBUG - Progresso: {task['completed_subtasks']}/{task['total_subtasks']}")
 
-                    # Verificar se tarefa está completa
                     if task['completed_subtasks'] >= task['total_subtasks']:
                         task['status'] = 'completed'
                         task['end_time'] = time.time()
@@ -140,7 +128,6 @@ def index():
 
 @app.route('/api/multiply-matrices', methods=['POST'])
 def multiply_matrices_distributed():
-    """Endpoint que distribui multiplicação para workers"""
     try:
         if not request.is_json:
             return jsonify({'error': 'Content-Type deve ser application/json'}), 400
@@ -153,18 +140,15 @@ def multiply_matrices_distributed():
         matrix_a = data['matrixA']
         matrix_b = data['matrixB']
 
-        # Validações básicas
         if not validate_matrix(matrix_a) or not validate_matrix(matrix_b):
             return jsonify({'error': 'Matrizes inválidas'}), 400
 
         if len(matrix_a[0]) != len(matrix_b):
             return jsonify({'error': 'Dimensões incompatíveis para multiplicação'}), 400
 
-        # Verificar se há workers disponíveis
         if len(connected_workers) == 0:
             return jsonify({'error': 'Nenhum worker conectado'}), 503
 
-        # Criar tarefa distribuída com tratamento de erro
         task_result = task_manager.create_task(matrix_a, matrix_b)
 
         if task_result is None or task_result == (None, None):
@@ -176,7 +160,6 @@ def multiply_matrices_distributed():
 
         print(f"DEBUG - Tarefa criada: {task_id} com {len(subtasks)} subtasks")
 
-        # Distribuir sub-tarefas para workers
         worker_list = list(connected_workers.keys())
         print(f"DEBUG - Workers disponíveis: {worker_list}")
 
@@ -185,19 +168,17 @@ def multiply_matrices_distributed():
             print(f"DEBUG - Enviando subtask {subtask['subtask_id']} para worker {worker_id}")
             socketio.emit('execute_task', subtask, room=connected_workers[worker_id]['session_id'])
 
-        # Aguardar conclusão com logs
         timeout = 30
         start_time = time.time()
 
         while task_id in pending_tasks and (time.time() - start_time) < timeout:
             elapsed = time.time() - start_time
-            if int(elapsed) % 5 == 0:  # Log a cada 5 segundos
+            if int(elapsed) % 5 == 0:
                 remaining_tasks = pending_tasks[task_id]['total_subtasks'] - pending_tasks[task_id][
                     'completed_subtasks']
                 print(f"DEBUG - Aguardando... {elapsed:.1f}s elapsed, {remaining_tasks} tasks restantes")
             time.sleep(0.1)
 
-        # Verificar resultado
         if task_id in completed_tasks:
             result = completed_tasks[task_id]
             print(f"SUCESSO - Retornando resultado da tarefa {task_id}")
@@ -220,7 +201,6 @@ def multiply_matrices_distributed():
 
 
 def validate_matrix(matrix):
-    """Valida se é uma matriz válida"""
     if not isinstance(matrix, list) or len(matrix) == 0:
         return False
 
@@ -235,10 +215,8 @@ def validate_matrix(matrix):
     return True
 
 
-# Eventos WebSocket para workers
 @socketio.on('worker_connect')
 def handle_worker_connect(data):
-    """Worker se conecta ao servidor"""
     worker_id = data.get('worker_id', str(uuid.uuid4()))
     worker_info = {
         'worker_id': worker_id,
@@ -257,7 +235,6 @@ def handle_worker_connect(data):
 @socketio.on('task_completed')
 @socketio.on('task_completed')
 def handle_task_completed(data):
-    """Worker retorna resultado da sub-tarefa"""
     print(f"DEBUG - Recebido task_completed: {data}")
 
     try:
@@ -269,7 +246,6 @@ def handle_task_completed(data):
 
         print(f"DEBUG - Processando: task_id={task_id}, subtask_id={subtask_id}, start_row={start_row}")
 
-        # Validar dados recebidos
         if not all([task_id, subtask_id, result is not None, start_row is not None, worker_id]):
             print(f"ERRO - Dados incompletos recebidos do worker: {data}")
             return
@@ -280,7 +256,6 @@ def handle_task_completed(data):
             print(
                 f"DEBUG - Worker {worker_id} updated, tasks completed: {connected_workers[worker_id]['tasks_completed']}")
 
-        # Completar sub-tarefa
         is_complete = task_manager.complete_subtask(task_id, subtask_id, result, start_row)
 
         if is_complete:
@@ -295,7 +270,6 @@ def handle_task_completed(data):
 
 @socketio.on('disconnect')
 def handle_worker_disconnect():
-    """Worker se desconecta"""
     worker_to_remove = None
     for worker_id, worker_info in connected_workers.items():
         if worker_info['session_id'] == request.sid:
@@ -309,7 +283,6 @@ def handle_worker_disconnect():
 
 @app.route('/status')
 def status():
-    """Endpoint para verificar status dos workers"""
     return jsonify({
         'workers_connected': len(connected_workers),
         'workers': {wid: {
