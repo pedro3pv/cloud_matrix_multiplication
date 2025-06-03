@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import uuid
@@ -93,12 +95,10 @@ class TaskManager:
 
     def complete_subtask(self, task_id, subtask_id, result, start_row):
         """Marca uma sub-tarefa como completa"""
-        print(f"DEBUG - complete_subtask: task_id={task_id}, start_row={start_row}")
 
         with self.lock:
             if task_id in pending_tasks:
                 task = pending_tasks[task_id]
-                print(f"DEBUG - Tarefa encontrada: {task['completed_subtasks']}/{task['total_subtasks']} completas")
 
                 # Inserir resultado na posição correta
                 try:
@@ -111,7 +111,6 @@ class TaskManager:
                             return False
 
                     task['completed_subtasks'] += 1
-                    print(f"DEBUG - Progresso: {task['completed_subtasks']}/{task['total_subtasks']}")
 
                     # Verificar se tarefa está completa
                     if task['completed_subtasks'] >= task['total_subtasks']:
@@ -126,7 +125,6 @@ class TaskManager:
                     return False
             else:
                 print(f"ERRO - Task ID {task_id} não encontrado em pending_tasks")
-                print(f"DEBUG - Pending tasks disponíveis: {list(pending_tasks.keys())}")
 
         return False
 
@@ -174,15 +172,12 @@ def multiply_matrices_distributed():
         if task_id is None or subtasks is None:
             return jsonify({'error': 'Dados de tarefa inválidos'}), 500
 
-        print(f"DEBUG - Tarefa criada: {task_id} com {len(subtasks)} subtasks")
 
         # Distribuir sub-tarefas para workers
         worker_list = list(connected_workers.keys())
-        print(f"DEBUG - Workers disponíveis: {worker_list}")
 
         for i, subtask in enumerate(subtasks):
             worker_id = worker_list[i % len(worker_list)]
-            print(f"DEBUG - Enviando subtask {subtask['subtask_id']} para worker {worker_id}")
             socketio.emit('execute_task', subtask, room=connected_workers[worker_id]['session_id'])
 
         # Aguardar conclusão com logs
@@ -194,13 +189,11 @@ def multiply_matrices_distributed():
             if int(elapsed) % 5 == 0:  # Log a cada 5 segundos
                 remaining_tasks = pending_tasks[task_id]['total_subtasks'] - pending_tasks[task_id][
                     'completed_subtasks']
-                print(f"DEBUG - Aguardando... {elapsed:.1f}s elapsed, {remaining_tasks} tasks restantes")
             time.sleep(0.1)
 
         # Verificar resultado
         if task_id in completed_tasks:
             result = completed_tasks[task_id]
-            print(f"SUCESSO - Retornando resultado da tarefa {task_id}")
             return jsonify({
                 'success': True,
                 'result': result['result_matrix'],
@@ -209,14 +202,13 @@ def multiply_matrices_distributed():
                 'subtasks_completed': result['completed_subtasks']
             }), 200
         else:
-            print(f"TIMEOUT - Tarefa {task_id} não completada a tempo")
             return jsonify({'error': 'Timeout na execução distribuída'}), 408
 
     except Exception as e:
-        print(f"ERRO - Erro interno: {str(e)}")
+        print(f"ERRO:{str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 
 def validate_matrix(matrix):
@@ -255,10 +247,8 @@ def handle_worker_connect(data):
 
 
 @socketio.on('task_completed')
-@socketio.on('task_completed')
 def handle_task_completed(data):
     """Worker retorna resultado da sub-tarefa"""
-    print(f"DEBUG - Recebido task_completed: {data}")
 
     try:
         task_id = data.get('task_id')
@@ -267,29 +257,23 @@ def handle_task_completed(data):
         start_row = data.get('start_row')
         worker_id = data.get('worker_id')
 
-        print(f"DEBUG - Processando: task_id={task_id}, subtask_id={subtask_id}, start_row={start_row}")
 
         # Validar dados recebidos
         if not all([task_id, subtask_id, result is not None, start_row is not None, worker_id]):
-            print(f"ERRO - Dados incompletos recebidos do worker: {data}")
             return
 
         if worker_id in connected_workers:
             connected_workers[worker_id]['tasks_completed'] += 1
             connected_workers[worker_id]['status'] = 'available'
-            print(
-                f"DEBUG - Worker {worker_id} updated, tasks completed: {connected_workers[worker_id]['tasks_completed']}")
 
         # Completar sub-tarefa
         is_complete = task_manager.complete_subtask(task_id, subtask_id, result, start_row)
 
         if is_complete:
             print(f"SUCESSO - Tarefa {task_id} completada por {len(connected_workers)} workers")
-        else:
-            print(f"DEBUG - Sub-tarefa {subtask_id} processada, aguardando outras...")
 
     except Exception as e:
-        print(f"ERRO - Erro ao processar task_completed: {e}")
+        print(f"ERRO: {e}")
         import traceback
         traceback.print_exc()
 
@@ -304,7 +288,6 @@ def handle_worker_disconnect():
 
     if worker_to_remove:
         del connected_workers[worker_to_remove]
-        print(f"Worker {worker_to_remove} desconectado. Workers restantes: {len(connected_workers)}")
 
 
 @app.route('/status')
@@ -323,7 +306,6 @@ def status():
 
 
 if __name__ == '__main__':
-    if __name__ == '__main__':
-        print("Servidor de multiplicação distribuída iniciado!")
-        print("Workers podem se conectar em ws://localhost:5000")
-        socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
+    port = 5000
+    print(f"Workers podem se conectar em ws://localhost:{port}")
+    socketio.run(app, debug=True, port=port, allow_unsafe_werkzeug=True)
