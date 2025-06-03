@@ -162,6 +162,9 @@ def multiply_matrices_distributed():
         if len(connected_workers) == 0:
             return jsonify({'error': 'Nenhum worker conectado'}), 503
 
+        print("Aguardando conclusão das sub-tarefas...")
+        start_timer = time.time()
+
         # Criar tarefa distribuída com tratamento de erro
         task_result = task_manager.create_task(matrix_a, matrix_b)
 
@@ -190,6 +193,9 @@ def multiply_matrices_distributed():
                 remaining_tasks = pending_tasks[task_id]['total_subtasks'] - pending_tasks[task_id][
                     'completed_subtasks']
             time.sleep(0.1)
+
+        end_time = time.time()
+        print(f"Tempo total para receber as respostas: {end_time - start_timer:.4f} segundos")
 
         # Verificar resultado
         if task_id in completed_tasks:
