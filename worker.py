@@ -1,8 +1,7 @@
 import socketio
-import json
 import sys
 import time
-import threading
+import concurrent.futures
 import uuid
 from multiprocessing import cpu_count
 
@@ -57,16 +56,13 @@ class MatrixWorker:
         return True
 
     def multiply_matrices_chunk(self, matrix_a_chunk, matrix_b):
-        """Multiplica um chunk da matriz A com matriz B completa"""
+        """Multiplica um chunk da matriz A com matriz B completa usando paralelismo avançado"""
+
         try:
-            # Debug: imprimir dimensões recebidas
-            print(f"[{self.worker_id}] DEBUG - Dimensões recebidas:")
             print(
                 f"  matrix_a_chunk: {len(matrix_a_chunk) if matrix_a_chunk else 0} x {len(matrix_a_chunk[0]) if matrix_a_chunk and matrix_a_chunk[0] else 0}")
             print(
                 f"  matrix_b: {len(matrix_b) if matrix_b else 0} x {len(matrix_b[0]) if matrix_b and matrix_b[0] else 0}")
-
-            # Validar estruturas das matrizes
             self.validate_matrix_structure(matrix_a_chunk, "matrix_a_chunk")
             self.validate_matrix_structure(matrix_b, "matrix_b")
 
@@ -75,44 +71,42 @@ class MatrixWorker:
             cols_a = len(matrix_a_chunk[0])
             rows_b = len(matrix_b)
 
-            # Verificar dimensões compatíveis para multiplicação
             if cols_a != rows_b:
                 raise ValueError(f"Dimensões incompatíveis: matrix_a_chunk cols ({cols_a}) != matrix_b rows ({rows_b})")
 
-            print(
-                f"[{self.worker_id}] DEBUG - Multiplicação: ({rows_a}x{cols_a}) x ({rows_b}x{cols_b}) = ({rows_a}x{cols_b})")
+            # Criar lista de todas as multiplicações a serem realizadas
+            tasks = [(i, j) for i in range(rows_a) for j in range(cols_b)]
 
-            # Inicializar matriz resultado
-            result = [[0 for _ in range(cols_b)] for _ in range(rows_a)]
+            def compute_element(task):
+                i, j = task
+                current_sum = 0
+                for k in range(cols_a):
+                    if k >= len(matrix_b):
+                        raise IndexError(f"Índice k={k} >= len(matrix_b)={len(matrix_b)}")
+                    if j >= len(matrix_b[k]):
+                        raise IndexError(f"Índice j={j} >= len(matrix_b[{k}])={len(matrix_b[k])}")
+                    if k >= len(matrix_a_chunk[i]):
+                        raise IndexError(f"Índice k={k} >= len(matrix_a_chunk[{i}])={len(matrix_a_chunk[i])}")
+                    current_sum += matrix_a_chunk[i][k] * matrix_b[k][j]
+                return (i, j, current_sum)
 
-            # Multiplicação das matrizes com verificações extras
-            for i in range(rows_a):
-                for j in range(cols_b):
-                    current_sum = 0
-                    for k in range(cols_a):
-                        # Verificações defensivas
-                        if k >= len(matrix_b):
-                            raise IndexError(f"Índice k={k} >= len(matrix_b)={len(matrix_b)}")
+            # Usando ThreadPoolExecutor para dividir igualmente entre as threads
+            result_matrix = [[0 for _ in range(cols_b)] for _ in range(rows_a)]
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                for i, j, value in executor.map(compute_element, tasks):
+                    result_matrix[i][j] = value
 
-                        if j >= len(matrix_b[k]):
-                            raise IndexError(f"Índice j={j} >= len(matrix_b[{k}])={len(matrix_b[k])}")
+            print(f"[{self.worker_id}] Multiplicação paralela concluída com sucesso")
+            return result_matrix
 
-                        if k >= len(matrix_a_chunk[i]):
-                            raise IndexError(f"Índice k={k} >= len(matrix_a_chunk[{i}])={len(matrix_a_chunk[i])}")
-
-                        current_sum += matrix_a_chunk[i][k] * matrix_b[k][j]
-
-                    result[i][j] = current_sum
-
-            print(f"[{self.worker_id}] DEBUG - Multiplicação concluída com sucesso")
+            print(f"[{self.worker_id}] Multiplicação paralela concluída com sucesso")
             return result
 
         except Exception as e:
-            print(f"[{self.worker_id}] DEBUG - Erro detalhado na multiplicação:")
+            print(f"[{self.worker_id}] Erro detalhado na multiplicação:")
             print(f"  Erro: {str(e)}")
             print(f"  Tipo: {type(e).__name__}")
 
-            # Log adicional das estruturas recebidas
             try:
                 print(
                     f"  matrix_a_chunk structure: {[len(row) if isinstance(row, list) else 'not-list' for row in matrix_a_chunk] if matrix_a_chunk else 'None'}")
@@ -141,6 +135,19 @@ class MatrixWorker:
         """Callback de desconexão"""
         print(f"[{self.worker_id}] Desconectado do servidor")
         self.is_connected = False
+
+        tentativas = 0
+        while tentativas < 3 and not self.is_connected:
+            tentativas += 1
+            print(f"[{self.worker_id}] Tentando reconectar ({tentativas}/3)...")
+            try:
+                self.sio.connect(self.server_url)
+                if self.is_connected:
+                    print(f"[{self.worker_id}] Reconectado com sucesso!")
+                    break
+            except Exception as e:
+                print(f"[{self.worker_id}] Falha ao reconectar: {e}")
+                time.sleep(2)
 
     def on_registered(self, data):
         """Callback de registro confirmado"""
@@ -184,9 +191,6 @@ class MatrixWorker:
             else:
                 task_id = subtask_id  # Fallback
 
-            print(f"[{self.worker_id}] DEBUG - subtask_id: {subtask_id}")
-            print(f"[{self.worker_id}] DEBUG - task_id extraído: {task_id}")
-
             # Enviar resultado de volta
             response = {
                 'task_id': task_id,
@@ -198,7 +202,6 @@ class MatrixWorker:
                 'chunk_size': len(matrix_a_chunk)
             }
 
-            print(f"[{self.worker_id}] DEBUG - Enviando response: {response}")
             self.sio.emit('task_completed', response)
             print(f"[{self.worker_id}] Tarefa {subtask_id} completada em {execution_time:.3f}s")
 
@@ -233,7 +236,6 @@ class MatrixWorker:
                         'status': 'active'
                     })
         except KeyboardInterrupt:
-            print(f"[{self.worker_id}] Parando worker...")
             self.disconnect()
 
 
@@ -246,13 +248,11 @@ def main():
     worker = MatrixWorker(server_url, worker_id)
 
     if worker.connect():
-        print(f"Worker {worker.worker_id} pronto para receber tarefas!")
-        print("Pressione Ctrl+C para parar")
+        print(f"Worker {worker.worker_id}")
 
         try:
             worker.keep_alive()
         except KeyboardInterrupt:
-            print("\nParando worker...")
             worker.disconnect()
     else:
         print("Falha ao conectar worker")
